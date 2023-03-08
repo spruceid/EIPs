@@ -104,22 +104,6 @@ contract ERC3525 is IERC3525, IERC3525Metadata, ERC721Enumerable {
         _transfer(fromTokenId_, toTokenId_, value_);
     }
 
-    function safeTransferFrom( uint256 fromTokenId_, uint256 toTokenId_, uint256 value_, bytes calldata data_) public payable virtual override {
-        _spendAllowance(_msgSender(), fromTokenId_, value_);
-
-        _safeTransfer(fromTokenId_, toTokenId_, value_, data_);
-    }
-
-    function safeTransferFrom( uint256 fromTokenId_, address to_, uint256 value_, bytes calldata data_) public payable virtual override returns (uint256) {
-        _spendAllowance(_msgSender(), fromTokenId_, value_);
-
-        uint256 newTokenId = _getNewTokenId(fromTokenId_);
-        _mint(to_, newTokenId, ERC3525.slotOf(fromTokenId_));
-        _safeTransfer(fromTokenId_, newTokenId, value_, data_);
-
-        return newTokenId;
-    }
-
     function _mint( address to_, uint256 tokenId_, uint256 slot_) private {
         ERC721._mint(to_, tokenId_);
         _slots[tokenId_] = slot_;
@@ -141,8 +125,9 @@ contract ERC3525 is IERC3525, IERC3525Metadata, ERC721Enumerable {
     }
 
     function _burn(uint256 tokenId_) internal virtual override {
-        ERC721._burn(tokenId_);
         address owner = ERC721.ownerOf(tokenId_);
+        ERC721._burn(tokenId_);
+
         uint256 slot = _slots[tokenId_];
         uint256 value = _values[tokenId_];
 
@@ -175,12 +160,6 @@ contract ERC3525 is IERC3525, IERC3525Metadata, ERC721Enumerable {
         _afterValueTransfer(from, to, fromTokenId_, toTokenId_, _slots[fromTokenId_], value_);
 
         emit TransferValue(fromTokenId_, toTokenId_, value_);
-    }
-
-    function _safeTransfer( uint256 fromTokenId_, uint256 toTokenId_, uint256 value_, bytes memory data_) internal virtual {
-        _transfer(fromTokenId_, toTokenId_, value_);
-        require( _checkOnERC3525Received(fromTokenId_, toTokenId_, value_, data_),
-            "ERC3525: transfer to non ERC3525Receiver implementer");
     }
 
     function _spendAllowance( address operator_, uint256 tokenId_, uint256 value_) internal virtual {
@@ -218,7 +197,7 @@ contract ERC3525 is IERC3525, IERC3525Metadata, ERC721Enumerable {
 
     function _checkOnERC3525Received( uint256 fromTokenId_, uint256 toTokenId_, uint256 value_, bytes memory data_) private returns (bool) {
         address to = ERC721.ownerOf((toTokenId_));
-        if (to.isContract()) {
+        if (to.isContract() && IERC165(to).supportsInterface(type(IERC3525Receiver).interfaceId)) {
             try
                 IERC3525Receiver(to).onERC3525Received( _msgSender(), fromTokenId_, toTokenId_, value_, data_)
             returns (bytes4 retval) {
